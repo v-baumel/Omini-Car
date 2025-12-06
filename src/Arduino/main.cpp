@@ -1,19 +1,18 @@
 #include <Arduino.h>
-
-// put function declarations here:
-int myFunction(int, int);
+#include <SoftwareSerial.h>
+SoftwareSerial BT(2, 3);
 
 void setup() {
   Serial.begin(9600);
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  BT.begin(9600); // taxa padrão do HC-05
+
+  Serial.println("Hearing HC-05...");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
-
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  if (BT.available()) {
+    char c = BT.read();
+    Serial.print("Input recieved: ");
+    Serial.println(c);
+  }
 }
