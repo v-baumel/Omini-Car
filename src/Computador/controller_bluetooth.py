@@ -1,46 +1,78 @@
 import pygame
 import serial
+import serial.tools.list_ports
 import time
 
-SERIAL_PORT = "/dev/rfcomm1"   # change to your HC-05 bound port
+# -- config --
 BAUD_RATE = 9600
+DEADZONE = 0.05        
+SEND_INTERVAL = 0.05 
 
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE)
-time.sleep(2)  # wait for Arduino reset
+def find_hc05_port():
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        desc = (p.description or "").lower()
+        device = (p.device or "").lower()
+        if "hc-05" in desc or "hc05" in desc or "hc-05" in device:
+            return p.device
+    return None
+
+
+port = find_hc05_port() or "COM5"
+print(f"Conectando ao port: {port}...")
+
+try:
+    ser = serial.Serial(port, BAUD_RATE, timeout=1)
+    time.sleep(2) 
+except serial.SerialException as e:
+    print(f"Falha ao abrir serial port: {e}")
+    exit()
 
 pygame.init()
 pygame.joystick.init()
 
 if pygame.joystick.get_count() == 0:
-    print("No controller detected!")
+    print("Controle não encontrado!")
     exit()
 
 js = pygame.joystick.Joystick(0)
-js.init()
 
-print("DS4 connected:", js.get_name())
-n = 0
+print(f"Controle detectado: {js.get_name()}")
 
-while True:
+clock = pygame.time.Clock()
+last_sent_time = 0
+prev_x, prev_y, prev_z = 0, 0, 0
 
+running = True
+try:
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
 
+        x = js.get_axis(0)
+        y = js.get_axis(1)
+        z = js.get_axis(2) 
 
-    for event in pygame.event.get():
-        if event.type == pygame.JOYBUTTONDOWN:
-            if event.button == 1:      # X
-                ser.write(b"X")
-                print("X pressed")
+        if abs(x) < DEADZONE: x = 0
+        if abs(y) < DEADZONE: y = 0
+        if abs(z) < DEADZONE: z = 0 
 
-            elif event.button == 2:    # Circle / O
-                ser.write(b"O")
-                print("Circle (O) pressed")
+        current_time = time.time()
+        if (x != prev_x or y != prev_y or z != prev_z) and (current_time - last_sent_time > SEND_INTERVAL):
+            try:
+                msg = f"{x:.3f},{y:.3f},{z:.3f}\n".encode() 
+                ser.write(msg)
+                last_sent_time = current_time
+                prev_x, prev_y, prev_z = x, y, z
+                print(f"Enviado: {x}, {y}, {z}")
+            except Exception as e:
+                print(f"Serial error: {e}")
+                break
 
-            elif event.button == 0:    # Square
-                ser.write(b"S")
-                print("Square pressed")
+        clock.tick(60) 
 
-            elif event.button == 3:    # Triangle
-                ser.write(b"T")
-                print("Triangle pressed")
-
-    pygame.time.wait(10)
+finally:
+    print("Acabando...")
+    ser.close()
+    pygame.quit()
