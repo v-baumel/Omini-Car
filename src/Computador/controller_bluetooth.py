@@ -18,7 +18,11 @@ def find_hc05_port():
     return None
 
 
-port = find_hc05_port() or "COM5"
+port = find_hc05_port()
+if not port:
+    print("Port não encontrado!")
+    exit()
+
 print(f"Conectando ao port: {port}...")
 
 try:
