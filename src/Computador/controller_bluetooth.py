@@ -1,80 +1,75 @@
 import pygame
 import serial
-import serial.tools.list_ports
 import time
 
 # -- config --
 BAUD_RATE = 9600
-DEADZONE = 0.05        
-SEND_INTERVAL = 0.05 
+DEADZONE = 0.08
+MIN_SEND_INTERVAL = 0.1   # tempo mínimo entre envios
+MAX_SEND_INTERVAL = 1.0   # tempo máximo entre envios (heartbeat)
 
-def find_hc05_port():
-    ports = serial.tools.list_ports.comports()
-    for p in ports:
-        desc = (p.description or "").lower()
-        device = (p.device or "").lower()
-        if "hc-05" in desc or "hc05" in desc or "hc-05" in device:
-            return p.device
-    return None
+port = "/dev/rfcomm0"
 
-
-port = find_hc05_port()
-if not port:
-    print("Port não encontrado!")
-    exit()
-
-print(f"Conectando ao port: {port}...")
+print(f"Conectando à porta: {port}...")
 
 try:
-    ser = serial.Serial(port, BAUD_RATE, timeout=1)
-    time.sleep(2) 
+    ser = serial.Serial(port, BAUD_RATE)
+    time.sleep(2)
 except serial.SerialException as e:
-    print(f"Falha ao abrir serial port: {e}")
+    print(f"Falha ao abrir porta serial: {e}")
     exit()
 
 pygame.init()
 pygame.joystick.init()
 
-if pygame.joystick.get_count() == 0:
+js = pygame.joystick.Joystick(0)
+if not js:
     print("Controle não encontrado!")
     exit()
 
-js = pygame.joystick.Joystick(0)
-
-print(f"Controle detectado: {js.get_name()}")
-
 clock = pygame.time.Clock()
-last_sent_time = 0
-prev_x, prev_y, prev_z = 0, 0, 0
+prev_x, prev_y, prev_z = 0.0, 0.0, 0.0
+last_send_time = time.time()
+
+def changed(a, b, eps=0.01):
+    return abs(a - b) > eps
 
 running = True
 try:
     while running:
+        now = time.time()
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
         x = js.get_axis(0)
-        y = js.get_axis(1)
-        z = js.get_axis(2) 
+        y = -js.get_axis(1)
+        z = js.get_axis(3)
 
-        if abs(x) < DEADZONE: x = 0
-        if abs(y) < DEADZONE: y = 0
-        if abs(z) < DEADZONE: z = 0 
+        if abs(x) < DEADZONE: x = 0.0
+        if abs(y) < DEADZONE: y = 0.0
+        if abs(z) < DEADZONE: z = 0.0
 
-        current_time = time.time()
-        if (x != prev_x or y != prev_y or z != prev_z) and (current_time - last_sent_time > SEND_INTERVAL):
-            try:
-                msg = f"{x:.3f},{y:.3f},{z:.3f}\n".encode() 
-                ser.write(msg)
-                last_sent_time = current_time
-                prev_x, prev_y, prev_z = x, y, z
-                print(f"Enviado: {x}, {y}, {z}")
-            except Exception as e:
-                print(f"Serial error: {e}")
-                break
+        value_changed = (
+            changed(x, prev_x) or
+            changed(y, prev_y) or
+            changed(z, prev_z)
+        )
 
-        clock.tick(60) 
+        min_ok = (now - last_send_time) >= MIN_SEND_INTERVAL
+        max_ok = (now - last_send_time) >= MAX_SEND_INTERVAL
+
+        if (value_changed and min_ok) or max_ok:
+            msg = f"{x:.3f},{y:.3f},{z:.3f};".encode()
+            ser.write(msg)
+
+            prev_x, prev_y, prev_z = x, y, z
+            last_send_time = now
+
+            print(f"Enviado: {msg.decode().strip()}")
+
+        clock.tick(60)
 
 finally:
     print("Acabando...")

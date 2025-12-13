@@ -3,24 +3,29 @@
 #include "mecanum.h"
 #include "DCMotor.h"
 
-SoftwareSerial BTSerial(A0, A1); // motores vão usar todos os digitais, dá pra usar analog como digital
-
-DCMotor MFL, MFR, MBL, MBR;
-
-int x = 0; 
-int y = 0; 
-int z = 0; 
-
+DCMotor MFL, MFR, MBL, MBR; // Motor Front Left, Motor Front Right, Motor Back Left, Motor Back Right
 void setPower(MecanumOutput P){
-      MFR.setPower(P.fr);
-      MFL.setPower(P.fl);
-      MBR.setPower(P.br);
-      MBL.setPower(P.bl);
+  Serial.print("FL: ");
+  Serial.print(P.fl);
+  Serial.print(" | FR: ");
+  Serial.print(P.fr);
+  Serial.print(" | BL: ");
+  Serial.print(P.bl);
+  Serial.print(" | BR: ");
+  Serial.println(P.br);
+
+  MFR.setPower(P.fr);
+  MFL.setPower(P.fl);
+  MBR.setPower(P.br);
+  MBL.setPower(P.bl);
 }
+
+SoftwareSerial BTSerial(A0, A1);  // RX, TX
 
 void setup() {
   Serial.begin(9600);       
   BTSerial.begin(9600);
+
   // Motor 1 (Front Left): ENA=D3, IN1=D2, IN2=D4
   MFL.init(3, 2, 4);      
   
@@ -36,28 +41,44 @@ void setup() {
   Serial.println("OMINICAR ATIVADO");
 }
 
+
+// milis usa unsigned long
+unsigned long lastBT = 0;  
+unsigned long BT_TIMEOUT = 2000; // tempo para desligar o bluetooth caso não haja input 
+float x = 0; 
+float y = 0; 
+float z = 0; 
+
+
 void loop() {
   if (BTSerial.available()) {
-    String data = BTSerial.readStringUntil('\n');  
-    int comma1Index = data.indexOf(',');
-    int comma2Index = data.indexOf(',', comma1Index + 1);
-    
-    if (comma1Index != -1 && comma2Index != -1) {
-      x = data.substring(0, comma1Index).toInt();
-      y = data.substring(comma1Index + 1, comma2Index).toInt();
-      z = data.substring(comma2Index + 1).toInt();
+    lastBT = millis();
 
-      // para debug
-      Serial.print("X: ");
-      Serial.print(x);
-      Serial.print(" | Y: ");
-      Serial.print(y);
-      Serial.print(" | Z: ");
-      Serial.println(z);
+    String data = BTSerial.readStringUntil(';');
+    //Serial.println(data);
 
-      setPower(mecanum_from_vector(x,y,z));
-    } 
-    else setPower({0,0,0,0});
 
-  } else setPower({0,0,0,0});
+    int c1 = data.indexOf(',');
+    int c2 = data.indexOf(',', c1 + 1);
+
+    if (c1 != -1 && c2 != -1) {
+      x = data.substring(0, c1).toFloat();
+      y = data.substring(c1 + 1, c2).toFloat();
+      z = data.substring(c2 + 1).toFloat();
+
+        // Serial.print("x=");
+        // Serial.print(x);
+        // Serial.print(" y=");
+        // Serial.print(y);
+        // Serial.print(" z=");
+        // Serial.println(z);
+
+      setPower(mecanum_from_vector(x, y, z));
+    }
+  }
+
+  if (millis() - lastBT > BT_TIMEOUT) {
+    setPower(MecanumOutput{0,0,0,0}); // desilgar os motores se parar de receber bluetooth por muito tempo
+    lastBT = millis();
+  }
 }
