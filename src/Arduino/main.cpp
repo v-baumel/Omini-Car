@@ -23,22 +23,23 @@ void setPower(MecanumOutput P){
 SoftwareSerial BTSerial(A0, A1);  // RX, TX
 
 void setup() {
-  Serial.begin(9600);       
+  Serial.begin(9600); 
   BTSerial.begin(9600);
 
   // Motor 1 (Front Left): ENA=D3, IN1=D2, IN2=D4
   MFL.init(3, 2, 4);      
   
   // Motor 2 (Front Right): ENB=D5, IN3=D6, IN4=D7
-  MFR.init(5, 6, 7);    
+  MFR.init(5, 6, 7);
+  
 
   // Motor 3 (Back Left): ENA=D9, IN1=D8, IN2=D12
   MBL.init(9, 8, 12);    
   
   // Motor 4 (Back Right): ENB=D10, IN3=D11, IN4=D13
-  MBR.init(10, 11, 13);
+  MBR.init(10, 11, A3);
 
-  Serial.println("OMINICAR ATIVADO");
+  Serial.println("OMINICAR ATIVADO2"); 
 }
 
 
